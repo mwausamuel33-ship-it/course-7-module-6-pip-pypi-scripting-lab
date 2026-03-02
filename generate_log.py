@@ -1,175 +1,209 @@
 #!/usr/bin/env python3
 """
-CLI Task Manager and Log Generator
+Simple CLI Task Manager and Log Generator
 
-Features:
-- add-task: Adds a task to a simple JSON store tied to a user
-- complete-task: Marks a task complete
-- generate-log: Writes a daily log file
-- fetch-post: Uses requests to fetch sample data from a public API
+This script helps manage tasks and generate logs.
+It can also fetch data from the internet and save it to files.
 
-Outputs are printed to terminal and, when relevant, written to files.
-
-Run:
-  python generate_log.py <command> [options]
-
-Examples:
+Usage:
   python generate_log.py generate-log
   python generate_log.py add-task --user alice --title "Write docs"
   python generate_log.py complete-task --user alice --id 1
+  python generate_log.py list-tasks --user alice
   python generate_log.py fetch-post --id 1
 """
-from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import dataclass, asdict
+import os
 from datetime import datetime
-from pathlib import Path
-from typing import List, Optional
 
 try:
-    import requests  # type: ignore
-except Exception:  # pragma: no cover
-    requests = None  # Delayed error if command requires it
-
-DATA_DIR = Path(".data")
-TASKS_FILE = DATA_DIR / "tasks.json"
+    import requests
+except ImportError:
+    requests = None
 
 
-@dataclass
-class Task:
-    id: int
-    title: str
-    completed: bool = False
-    created_at: str = datetime.utcnow().isoformat()
-    completed_at: Optional[str] = None
-
-
-class TaskStore:
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.path.exists():
-            self._write({})
-
-    def _read(self) -> dict:
-        try:
-            return json.loads(self.path.read_text())
-        except json.JSONDecodeError:
-            return {}
-
-    def _write(self, data: dict) -> None:
-        self.path.write_text(json.dumps(data, indent=2))
-
-    def _next_id(self, user: str, tasks: List[dict]) -> int:
-        return (max((t.get("id", 0) for t in tasks), default=0) + 1) if tasks else 1
-
-    def add(self, user: str, title: str) -> Task:
-        db = self._read()
-        user_tasks = db.get(user, [])
-        new_task = Task(id=self._next_id(user, user_tasks), title=title)
-        user_tasks.append(asdict(new_task))
-        db[user] = user_tasks
-        self._write(db)
-        return new_task
-
-    def complete(self, user: str, task_id: int) -> Optional[Task]:
-        db = self._read()
-        user_tasks = db.get(user, [])
-        for t in user_tasks:
-            if t.get("id") == task_id:
-                t["completed"] = True
-                t["completed_at"] = datetime.utcnow().isoformat()
-                self._write(db)
-                return Task(**t)
-        return None
-
-    def list(self, user: str) -> List[Task]:
-        db = self._read()
-        return [Task(**t) for t in db.get(user, [])]
-
-
-def generate_log(_: argparse.Namespace) -> None:
+def generate_log(args):
+    """Create a log file with today's date and some sample entries."""
     log_data = ["User logged in", "User updated profile", "Report exported"]
     filename = f"log_{datetime.now().strftime('%Y%m%d')}.txt"
+    
     with open(filename, "w") as file:
         for entry in log_data:
             file.write(f"{entry}\n")
+    
     print(f"Log written to {filename}")
 
 
-def cmd_add_task(ns: argparse.Namespace) -> None:
-    store = TaskStore(TASKS_FILE)
-    task = store.add(user=ns.user, title=ns.title)
-    print(f"Task added for {ns.user}: #{task.id} - {task.title}")
-
-
-def cmd_complete_task(ns: argparse.Namespace) -> None:
-    store = TaskStore(TASKS_FILE)
-    task = store.complete(user=ns.user, task_id=ns.id)
-    if task:
-        print(f"Task completed for {ns.user}: #{task.id} - {task.title}")
+def add_task(args):
+    """Add a new task for a user."""
+    user = args.user
+    title = args.title
+    
+    # Create data directory if it doesn't exist
+    if not os.path.exists(".data"):
+        os.makedirs(".data")
+    
+    # Load existing tasks or create empty dict
+    tasks_file = ".data/tasks.json"
+    if os.path.exists(tasks_file):
+        with open(tasks_file, "r") as f:
+            all_tasks = json.load(f)
     else:
-        print(f"No task with id {ns.id} found for user {ns.user}")
+        all_tasks = {}
+    
+    # Get user's tasks or create empty list
+    user_tasks = all_tasks.get(user, [])
+    
+    # Find next task ID
+    if user_tasks:
+        next_id = max(task["id"] for task in user_tasks) + 1
+    else:
+        next_id = 1
+    
+    # Create new task
+    new_task = {
+        "id": next_id,
+        "title": title,
+        "completed": False,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    
+    user_tasks.append(new_task)
+    all_tasks[user] = user_tasks
+    
+    # Save tasks
+    with open(tasks_file, "w") as f:
+        json.dump(all_tasks, f, indent=2)
+    
+    print(f"Task added for {user}: #{new_task['id']} - {new_task['title']}")
 
 
-def cmd_list_tasks(ns: argparse.Namespace) -> None:
-    store = TaskStore(TASKS_FILE)
-    tasks = store.list(user=ns.user)
-    if not tasks:
-        print(f"No tasks for user {ns.user}")
+def complete_task(args):
+    """Mark a task as completed."""
+    user = args.user
+    task_id = args.id
+    
+    tasks_file = ".data/tasks.json"
+    if not os.path.exists(tasks_file):
+        print(f"No tasks found for user {user}")
         return
-    for t in tasks:
-        status = "✓" if t.completed else "✗"
-        print(f"[{status}] #{t.id}: {t.title}")
+    
+    with open(tasks_file, "r") as f:
+        all_tasks = json.load(f)
+    
+    user_tasks = all_tasks.get(user, [])
+    
+    # Find and complete the task
+    for task in user_tasks:
+        if task["id"] == task_id:
+            task["completed"] = True
+            task["completed_at"] = datetime.utcnow().isoformat()
+            
+            # Save updated tasks
+            with open(tasks_file, "w") as f:
+                json.dump(all_tasks, f, indent=2)
+            
+            print(f"Task completed for {user}: #{task['id']} - {task['title']}")
+            return
+    
+    print(f"No task with id {task_id} found for user {user}")
 
 
-def cmd_fetch_post(ns: argparse.Namespace) -> None:
+def list_tasks(args):
+    """List all tasks for a user."""
+    user = args.user
+    
+    tasks_file = ".data/tasks.json"
+    if not os.path.exists(tasks_file):
+        print(f"No tasks for user {user}")
+        return
+    
+    with open(tasks_file, "r") as f:
+        all_tasks = json.load(f)
+    
+    user_tasks = all_tasks.get(user, [])
+    
+    if not user_tasks:
+        print(f"No tasks for user {user}")
+        return
+    
+    for task in user_tasks:
+        status = "✓" if task["completed"] else "✗"
+        print(f"[{status}] #{task['id']}: {task['title']}")
+
+
+def fetch_post(args):
+    """Fetch a post from the internet and save it to a file."""
     if requests is None:
-        raise RuntimeError("The 'requests' package is required. Install with: pip install requests")
-    url = f"https://jsonplaceholder.typicode.com/posts/{ns.id}"
-    resp = requests.get(url, timeout=10)
-    if resp.status_code == 200:
-        data = resp.json()
-        print("Fetched Post Title:", data.get("title", "No title found"))
-        # also write to file to demonstrate file I/O with external data
-        out = Path(f"post_{ns.id}.json")
-        out.write_text(json.dumps(data, indent=2))
-        print(f"Post data written to {out}")
+        print("Error: requests package not installed. Please run: pip install requests")
+        return
+    
+    post_id = args.id
+    url = f"https://jsonplaceholder.typicode.com/posts/{post_id}"
+    
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            title = data.get("title", "No title found")
+            print(f"Fetched Post Title: {title}")
+            
+            # Save to file
+            filename = f"post_{post_id}.json"
+            with open(filename, "w") as f:
+                json.dump(data, f, indent=2)
+            
+            print(f"Post data written to {filename}")
+        else:
+            print(f"Failed to fetch post {post_id}: HTTP {response.status_code}")
+    except Exception as e:
+        print(f"Error fetching post: {e}")
+
+
+def main():
+    """Main function to handle command line arguments."""
+    parser = argparse.ArgumentParser(description="Simple Task Manager and Log Generator")
+    
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    
+    # Generate log command
+    log_parser = subparsers.add_parser("generate-log", help="Create a daily log file")
+    
+    # Add task command
+    add_parser = subparsers.add_parser("add-task", help="Add a new task")
+    add_parser.add_argument("--user", required=True, help="Username")
+    add_parser.add_argument("--title", required=True, help="Task title")
+    
+    # Complete task command
+    complete_parser = subparsers.add_parser("complete-task", help="Mark a task as completed")
+    complete_parser.add_argument("--user", required=True, help="Username")
+    complete_parser.add_argument("--id", type=int, required=True, help="Task ID")
+    
+    # List tasks command
+    list_parser = subparsers.add_parser("list-tasks", help="List all tasks for a user")
+    list_parser.add_argument("--user", required=True, help="Username")
+    
+    # Fetch post command
+    fetch_parser = subparsers.add_parser("fetch-post", help="Fetch a post from the internet")
+    fetch_parser.add_argument("--id", type=int, default=1, help="Post ID (default: 1)")
+    
+    args = parser.parse_args()
+    
+    if args.command == "generate-log":
+        generate_log(args)
+    elif args.command == "add-task":
+        add_task(args)
+    elif args.command == "complete-task":
+        complete_task(args)
+    elif args.command == "list-tasks":
+        list_tasks(args)
+    elif args.command == "fetch-post":
+        fetch_post(args)
     else:
-        print(f"Failed to fetch post {ns.id}: HTTP {resp.status_code}")
-
-
-def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="CLI Task Manager and Log Generator")
-    sub = p.add_subparsers(dest="command", required=True)
-
-    g = sub.add_parser("generate-log", help="Write a daily log file")
-    g.set_defaults(func=generate_log)
-
-    a = sub.add_parser("add-task", help="Add a task for a user")
-    a.add_argument("--user", required=True)
-    a.add_argument("--title", required=True)
-    a.set_defaults(func=cmd_add_task)
-
-    c = sub.add_parser("complete-task", help="Mark a user's task complete")
-    c.add_argument("--user", required=True)
-    c.add_argument("--id", type=int, required=True)
-    c.set_defaults(func=cmd_complete_task)
-
-    l = sub.add_parser("list-tasks", help="List tasks for a user")
-    l.add_argument("--user", required=True)
-    l.set_defaults(func=cmd_list_tasks)
-
-    f = sub.add_parser("fetch-post", help="Fetch a sample post via requests and write to file")
-    f.add_argument("--id", type=int, default=1)
-    f.set_defaults(func=cmd_fetch_post)
-
-    return p
+        parser.print_help()
 
 
 if __name__ == "__main__":
-    parser = build_parser()
-    args = parser.parse_args()
-    args.func(args)
+    main()
