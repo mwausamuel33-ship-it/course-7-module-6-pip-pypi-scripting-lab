@@ -24,16 +24,33 @@ except ImportError:
     requests = None
 
 
-def generate_log(args):
-    """Create a log file with today's date and some sample entries."""
-    log_data = ["User logged in", "User updated profile", "Report exported"]
-    filename = f"log_{datetime.now().strftime('%Y%m%d')}.txt"
-    
+def generate_log(data):
+    """
+    Generate a timestamped log file from a list of entries.
+
+    - Validates that `data` is a list, raising ValueError otherwise.
+    - Creates a file named log_YYYYMMDD.txt in the current directory.
+    - Writes each list item on its own line, preserving order.
+    - Prints a confirmation message including the filename.
+    - Returns the filename.
+    """
+    # Validate input
+    if not isinstance(data, list):
+        raise ValueError("data must be a list")
+
+    # Generate a filename with today's date
+    today = datetime.now().strftime("%Y%m%d")
+    filename = f"log_{today}.txt"
+
+    # Write the log entries to a file
     with open(filename, "w") as file:
-        for entry in log_data:
+        for entry in data:
             file.write(f"{entry}\n")
-    
+
+    # Print a confirmation message
     print(f"Log written to {filename}")
+
+    return filename
 
 
 def add_task(args):
@@ -192,7 +209,9 @@ def main():
     args = parser.parse_args()
     
     if args.command == "generate-log":
-        generate_log(args)
+        # Use sample data for CLI usage
+        log_data = ["User logged in", "User updated profile", "Report exported"]
+        generate_log(log_data)
     elif args.command == "add-task":
         add_task(args)
     elif args.command == "complete-task":

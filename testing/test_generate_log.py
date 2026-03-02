@@ -14,8 +14,9 @@ def test_log_file_created():
             mock_file = MagicMock()
             mock_open.return_value.__enter__.return_value = mock_file
             
-            args = type('Args', (), {})()  # Create simple args object
-            generate_log(args)
+            # Pass a list instead of args object
+            log_data = ["User logged in", "User updated profile", "Report exported"]
+            generate_log(log_data)
             
             mock_open.assert_called_once_with('log_20230101.txt', 'w')
 
@@ -27,8 +28,9 @@ def test_log_file_name_format():
             mock_file = MagicMock()
             mock_open.return_value.__enter__.return_value = mock_file
             
-            args = type('Args', (), {})()  # Create simple args object
-            generate_log(args)
+            # Pass a list instead of args object
+            log_data = ["User logged in", "User updated profile", "Report exported"]
+            generate_log(log_data)
             
             mock_open.assert_called_once_with('log_20230101.txt', 'w')
 
@@ -40,8 +42,9 @@ def test_log_file_content_matches_expected():
             mock_file = MagicMock()
             mock_open.return_value.__enter__.return_value = mock_file
             
-            args = type('Args', (), {})()  # Create simple args object
-            generate_log(args)
+            # Pass a list instead of args object
+            log_data = ["User logged in", "User updated profile", "Report exported"]
+            generate_log(log_data)
             
             # Check that write was called with the expected log entries
             expected_calls = [
@@ -57,8 +60,9 @@ def test_generate_log_prints_confirmation_message():
     with patch('generate_log.datetime') as mock_datetime:
         mock_datetime.now.return_value.strftime.return_value = '20230101'
         with patch('builtins.print') as mock_print:
-            args = type('Args', (), {})()  # Create simple args object
-            generate_log(args)
+            # Pass a list instead of args object
+            log_data = ["User logged in", "User updated profile", "Report exported"]
+            generate_log(log_data)
             
             mock_print.assert_called_once_with('Log written to log_20230101.txt')
 
@@ -68,11 +72,10 @@ def test_log_file_is_created_and_removed():
         mock_datetime.now.return_value.strftime.return_value = '20230101'
         
         # Create a real file for this test
-        args = type('Args', (), {})()  # Create simple args object
-        generate_log(args)
+        log_data = ["User logged in", "User updated profile", "Report exported"]
+        filename = generate_log(log_data)
         
         # Check that file was created
-        filename = 'log_20230101.txt'
         assert os.path.exists(filename), f"{filename} not found."
         
         # Check file contents
