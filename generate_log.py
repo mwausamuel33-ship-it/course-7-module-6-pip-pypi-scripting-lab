@@ -90,7 +90,7 @@ class TaskStore:
         return [Task(**t) for t in db.get(user, [])]
 
 
-def cmd_generate_log(_: argparse.Namespace) -> None:
+def generate_log(_: argparse.Namespace) -> None:
     log_data = ["User logged in", "User updated profile", "Report exported"]
     filename = f"log_{datetime.now().strftime('%Y%m%d')}.txt"
     with open(filename, "w") as file:
@@ -146,7 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
 
     g = sub.add_parser("generate-log", help="Write a daily log file")
-    g.set_defaults(func=cmd_generate_log)
+    g.set_defaults(func=generate_log)
 
     a = sub.add_parser("add-task", help="Add a task for a user")
     a.add_argument("--user", required=True)
